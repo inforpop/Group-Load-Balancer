@@ -1,0 +1,214 @@
+Como adicionar um grupo de instâncias a um balanceador de carga 
+
+bookmark_border
+O balanceamento de carga do Google Cloud usa grupos de instâncias, gerenciadas e não gerenciadas, para veicular o tráfego. Dependendo do tipo de balanceador de carga que você estiver usando, adicione grupos de instâncias a um pool de destino ou serviço de back-end. Para saber mais, consulte Como escolher um balanceador de carga.
+
+Para saber mais sobre grupos de instâncias, leia a Visão geral de grupos de instâncias.
+
+Antes de começar
+Configure a autenticação, caso ainda não tenha feito isso. A autenticação é o processo de verificação da sua identidade para acesso a serviços e APIs do Google Cloud. Para executar códigos ou amostras de um ambiente de desenvolvimento local, autentique-se no Compute Engine da seguinte maneira.
+Selecione a guia para como planeja usar as amostras nesta página:
+
+Console
+gcloud
+REST
+Para usar as amostras da API REST nesta página em um ambiente de desenvolvimento local, use as credenciais fornecidas para a CLI gcloud.
+
+Instale a Google Cloud CLI e inicialize-a executando o seguinte comando:
+
+
+
+gcloud init
+Limitações
+Para usar o balanceamento de carga com um MIG regional, as seguintes limitações se aplicam:
+Não é possível usar o modo de balanceamento maxRate.
+Se você usa um esquema de balanceamento de carga HTTP(S) com um MIG regional, é necessário escolher o modo de balanceamento maxRatePerInstance ou maxUtilization.
+Adição de um grupo de instâncias gerenciadas a um serviço de back-end
+É necessário um serviço de back-end para criar a maioria dos tipos de balanceadores de carga.
+
+Um serviço de back-end pode conter vários back-ends. Um grupo de instâncias é um tipo de back-end. As instâncias contidas no grupo respondem ao tráfego vindo do balanceador de carga. O serviço de back-end, por sua vez, sabe quais instâncias podem ser usadas, quanto tráfego elas podem processar e a quantidade de tráfego que estão processando no momento. Além disso, a verificação de integridade é monitorada no serviço de back-end, que não envia novas conexões para instâncias não íntegras.
+
+Use as instruções para adicionar um grupo de instâncias gerenciadas a um serviço de back-end.
+
+Console
+gcloud
+REST
+Para adicionar um serviço de back-end usando a API REST, consulte backendServices.
+
+Adição de um grupo de instâncias gerenciadas a um pool de destino
+Um pool de destino é um objeto que contém uma ou mais instâncias de máquina virtual. Ele é usado nos Balanceadores de carga de rede externos de passagem, em que as solicitações do usuário são encaminhadas para o pool de destino associado ao balanceador de carga. As instâncias que fazem parte desse pool atendem essas solicitações e retornam uma resposta. Adicione um grupo de instâncias gerenciadas a um pool de destino para que, quando as instâncias forem adicionadas ou removidas do grupo, o pool também seja automaticamente atualizado com as alterações.
+
+Para adicionar um grupo de instâncias gerenciadas a um pool de destino, é preciso que esse pool já exista. Para mais informações, consulte a documentação Como adicionar um pool de destino.
+
+Para adicionar um grupo de instâncias gerenciadas a um pool de destino, execute as etapas a seguir. Isso faz com que todas as instâncias de VM contidas no grupo sejam adicionadas ao pool de destino.
+
+Observação: enquanto a instância estiver sendo adicionada, o currentAction dela mudará para REFRESHING. A instância não poderá ser usada enquanto estiver no estado REFRESHING, mas é possível usar o comando wait-until-stable para pesquisar nela até que se torne estável.
+Console
+gcloud
+REST
+Chame o método setTargetPools para um MIG regional ou MIG zonal. Exemplo:
+
+
+
+POST https://compute.googleapis.com/compute/v1/projects/PROJECT_ID/regions/REGION/regionInstanceGroupManagers/INSTANCE_GROUP/setTargetPools
+onde:
+
+PROJECT_ID é o ID do projeto da solicitação;
+REGION é a região do grupo de instâncias;
+INSTANCE_GROUP é o nome do grupo de instâncias.
+O corpo da solicitação conterá uma lista de URIs para os pools de destino a que você quer adicionar esse grupo. Exemplo:
+
+
+
+{
+  "targetPools": [
+    "regions/us-central1/targetPools/example-targetpool-1",
+    "regions/us-central1/targetPools/example-targetpool-2"
+  ]
+}
+Como atribuir portas nomeadas a grupos de instâncias gerenciadas
+As portas nomeadas são pares de chave-valor que representam o nome e o número de uma porta. O nome da porta representa o nome de um serviço ou aplicativo. Esse nome representa a porta em que o serviço ou aplicativo é executado.
+
+As portas nomeadas são utilizadas pelo Cloud Load Balancing. Balanceadores de carga que atuam como proxies se inscrevem em somente uma porta nomeada na configuração do serviço de back-end. O nome da porta é convertido em um número de porta com base no mapeamento de portas nomeadas de cada back-end do grupo de instâncias.
+
+Por exemplo, um serviço de back-end pode se inscrever em uma porta nomeada http-port. O grupo de instâncias de back-end pode ter uma porta chamada http-port:80. O grupo de instâncias de back-end instrui o balanceador de carga a enviar tráfego para uma VM no grupo na porta 80 usando um protocolo, como TCP. O protocolo é definido no serviço de back-end do balanceador de carga.
+
+As portas nomeadas são metadados simples usados por balanceadores de carga do proxy. Elas não controlam recursos de rede ou firewall no Compute Engine.
+
+Vários números de porta para uma porta nomeada
+É possível atribuir várias portas para cada nome de serviço. Também é possível atribuir vários nomes de serviço a cada porta.
+
+Tenha em mente os seguintes pontos:
+
+O tráfego é balanceado entre todas as portas com o mesmo nome.
+Um determinado serviço de back-end só pode encaminhar tráfego para uma porta nomeada de cada vez.
+Se você usar vários números de porta para uma porta nomeada, todas as portas precisarão ser do mesmo aplicativo.
+
+Por exemplo, http:80,http:8080 funciona, mas http:80,http:443 não funciona porque a porta 80 não é compatível com TLS.
+
+É possível definir várias portas nomeadas em um grupo de instâncias. Para ilustrar, considere um serviço de back-end de exemplo que assina a porta nomeada http-port e que tem dois grupos de instâncias de back-end:
+
+instance-group-a com uma porta nomeada de http-port:80
+instance-group-b com uma porta nomeada de http-port:79
+Este serviço de back-end envia tráfego para a porta 80 para VMs em instance-group-a e porta 79 para VMs em instance-group-b.
+
+Quando você adicionar o mesmo grupo de instâncias a vários serviços de back-end (para vários balanceadores de carga), e o grupo de instâncias exibir portas diferentes em cada balanceador de carga, não adicione todos os números de porta a uma única porta nomeada. Em vez disso, crie uma porta nomeada exclusiva e mapeie-a para um conjunto de portas que cada serviço de back-end deve exibir.
+
+Por exemplo, suponha que você tenha três aplicativos, cada um com seu próprio balanceador de carga. Cada aplicativo tem um número de porta: 81 para app1, 82 para app2 e 83 para app3. Supondo que os três serviços de back-end estejam usando um grupo de instâncias comum, atribua as portas nomeadas desse grupo de instâncias como [app1:81, app2:82, app3:83].
+
+Portas nomeadas e verificações de integridade
+Para que uma porta nomeada com vários números de porta em um serviço de back-end funcione em um balanceador de carga de aplicativo externo ou interno, a verificação de integridade precisa ter a flag --use-serving-port em vez de um número de porta específico de dois minutos. Essa opção não está disponível no Console do Google Cloud. Para definir --use-serving-port, você precisa usar a CLI do Google Cloud ou a API.
+
+Suponha que você tenha um aplicativo que balanceie a carga do tráfego em três portas diferentes (81, 82, 83) no mesmo serviço de back-end com um único grupo de instâncias. É possível atribuir as portas para esses grupos de instâncias como [app:81, 82, 83]. A verificação de integridade desse cenário precisa ter a sinalização --use-serving-port.
+
+Para mais informações, consulte a documentação de verificação de integridade do balanceamento de carga.
+
+Portas nomeadas e regras de firewall
+Portas nomeadas não criam nem modificam regras de firewall do Google Cloud. Para permitir o tráfego para as VMs de back-end, você ainda precisa criar as regras de firewall necessárias.
+
+Portas nomeadas e serviços de back-end
+Além da configuração do grupo de instâncias, configure também o serviço de back-end. Por exemplo, suponha que você definiu a porta nomeada em um grupo de instâncias com o nome my-service-name e a porta 8888:
+
+
+
+gcloud compute instance-groups set-named-ports my-unmanaged-ig \
+    --named-ports=my-service-name:8888
+Em seguida, faça referência à porta nomeada na configuração do serviço de back-end com o --port-name no serviço de back-end definido como my-service-name:
+
+
+
+gcloud compute backend-services update my-backend-service \
+    --port-name=my-service-name
+Como criar portas nomeadas
+Permissões exigidas para a tarefa
+
+Console
+gcloud
+REST
+A API instanceGroupManagers não oferece um método de API setNamedPorts. Em vez disso, use a API instanceGroups para executar esta tarefa.
+
+Crie uma solicitação na API instanceGroupse inclua o nome do grupo de instâncias. Para saber o valor fingerprint atual do grupo de instâncias, acesse as informações sobre um grupo específico. Inclua o fingerprint e um ou mais pares de valores namedPorts no corpo da solicitação:
+
+
+
+POST https://compute.googleapis.com/compute/v1/projects/PROJECT_ID/zones/ZONE/instanceGroups/INSTANCE_GROUP/setNamedPorts
+
+{
+  "fingerprint": "42WmSpB8rSM=",
+  "namedPorts": [
+    {
+       "name": "PORT_NAME",
+       "port": PORT_NUMBER
+    },
+    {
+       "name": "PORT_NAME",
+       "port": PORT_NUMBER
+    }
+  ]
+ }
+ 
+Por exemplo, se as portas 10, 20 e 80 forem para o mesmo aplicativo, será possível atribuir name1 a todas essas portas. Além disso, é possível atribuir dois nomes, name2 e name3, à porta 8080. Por fim, é possível atribuir a porta 9000 a name4, como no exemplo a seguir:
+
+
+
+POST https://compute.googleapis.com/compute/v1/projects/myproject/zones/us-central1-a/instanceGroups/example-group/setNamedPorts
+
+{
+   "fingerprint": "42WmSpB8rSM=",
+   "namedPorts": [
+      {
+       "name": "name1",
+       "port": 8080
+      },
+      {
+       "name": "name2",
+       "port": 9000
+      }
+   ]
+}
+Para atribuir várias portas a cada nome de serviço, crie várias entradas para os nomes. Por exemplo, atribua as portas 10, 20 e 80 a name1. Atribua também a porta 8080 a name2.
+
+
+
+POST https://compute.googleapis.com/compute/v1/projects/myproject/zones/us-central1-a/instanceGroups/example-group/setNamedPorts
+
+{
+   "fingerprint": "42WmSpB8rSM=",
+   "namedPorts": [
+      {
+       "name": "name1",
+       "port": 10
+      },
+      {
+       "name": "name1",
+       "port": 20
+      }
+      {
+       "name": "name1",
+       "port": 80
+      }
+      {
+       "name": "name2",
+       "port": 8080
+      }
+      {
+       "name": "name3",
+       "port": 80
+      }
+      {
+       "name": "name4",
+       "port": 8080
+      }
+   ]
+}
+Para listar as portas nomeadas que já estão atribuídas a um grupo de instâncias gerenciadas, crie uma solicitação GET que aponte para o grupo:
+
+
+
+GET https://compute.googleapis.com/compute/v1/projects/PROJECT_ID/zones/ZONE/instanceGroupManagers/INSTANCE_GROUP
+A seguir
+Teste o tutorial, Como usar o balanceamento de carga para aplicativos altamente disponíveis.
+Crie um modelo de instância que você possa usar para um grupo de instâncias gerenciadas.
+Crie um grupo de instâncias gerenciadas regional.
+Ative a recuperação automática do grupo de instâncias gerenciadas.
+Ative o escalonamento automático do gru
